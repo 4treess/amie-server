@@ -21,7 +21,7 @@ app.get('/api/events', async (req, res) => {
     const db = client.db(dbName);
     const events = await db.collection('milestones')
       .find()
-      .sort({ createdAt: -1 })
+      .sort({ sortDate: 1 })
       .toArray();
     res.json(events);
   } catch (err) {
@@ -33,8 +33,9 @@ app.get('/api/events', async (req, res) => {
 app.post('/api/events', async (req, res) => {
   try {
     const db = client.db(dbName);
+    const actualDate = new Date(`${req.body.date}, ${req.body.year}`);
     const result = await db.collection('milestones')
-      .insertOne({ ...req.body, createdAt: new Date() });
+      .insertOne({ ...req.body, sortDate: actualDate, createdAt: new Date() });
     res.json(result);
   } catch (err) {
     console.error("Error saving event:", err);
