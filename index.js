@@ -21,7 +21,7 @@ app.get('/api/events', async (req, res) => {
     const db = client.db(dbName);
     const events = await db.collection('milestones')
       .find()
-      .sort({ sortDate: 1 })
+      .sort({ sortDate: -1 })
       .toArray();
     res.json(events);
   } catch (err) {
