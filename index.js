@@ -30,6 +30,26 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+app.put('/api/events/:id', async (req, res) => {
+  const db = client.db(dbName);
+  try {
+    const updatedSortDate = new Date(`${req.body.date}, ${req.body.year}`);
+
+    const result = await db.collection('milestones').updateOne(
+      { _id: new ObjectId(req.params.id) }, // Converts string ID from URL to Mongo ObjectId
+      { 
+        $set: { 
+          ...req.body,
+          sortDate: updatedSortDate
+        } 
+      }
+    );
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update milestone" });
+    }
+});
+
 app.post('/api/events', async (req, res) => {
   try {
     const db = client.db(dbName);
