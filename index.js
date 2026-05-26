@@ -33,21 +33,35 @@ app.get('/api/events', async (req, res) => {
 app.put('/api/events/:id', async (req, res) => {
   const db = client.db(dbName);
   try {
+    const eventId = req.params.id;
+
+    // Build the updated chronological sorting key from the incoming edit data
     const updatedSortDate = new Date(`${req.body.date}, ${req.body.year}`);
 
     const result = await db.collection('milestones').updateOne(
-      { _id: new ObjectId(req.params.id) }, // Converts string ID from URL to Mongo ObjectId
+      { _id: new ObjectId(eventId) }, // 3. CRITICAL: Wrap the string ID in new ObjectId()
       { 
         $set: { 
-          ...req.body,
+          date: req.body.date,
+          year: req.body.year,
+          shortDesc: req.body.shortDesc,
+          fullTitle: req.body.fullTitle,
+          story: req.body.story,
+          image: req.body.image,
           sortDate: updatedSortDate
         } 
       }
     );
-    res.json({ success: true, result });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update milestone" });
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "No milestone found with that ID" });
     }
+
+    res.json({ success: true, message: "Milestone updated successfully", result });
+  } catch (err) {
+    console.error("❌ Backend PUT Error:", err);
+    res.status(500).json({ error: "Failed to update milestone", details: err.message });
+  }
 });
 
 app.post('/api/events', async (req, res) => {
