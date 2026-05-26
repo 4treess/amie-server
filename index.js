@@ -77,6 +77,27 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
+// HANDLE DELETE MILESTONE
+app.delete('/api/events/:id', async (req, res) => {
+  const db = client.db(dbName);
+  try {
+    const eventId = req.params.id;
+
+    const result = await db.collection('milestones').deleteOne({
+      _id: new ObjectId(eventId) // Convert the string ID into a real MongoDB ObjectId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "No milestone found with that ID" });
+    }
+
+    res.json({ success: true, message: "Memory deleted successfully!" });
+  } catch (err) {
+    console.error("❌ Backend DELETE Error:", err);
+    res.status(500).json({ error: "Failed to delete milestone", details: err.message });
+  }
+});
+
 // 4. SERVER START & PORT LOGIC
 // Render injects a PORT variable; we must listen on '0.0.0.0' for external access
 const PORT = process.env.PORT || 3001;
