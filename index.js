@@ -38,10 +38,8 @@ app.put('/api/events/:id', async (req, res) => {
     // Build the updated chronological sorting key from the incoming edit data
     const updatedSortDate = new Date(`${req.body.date}, ${req.body.year}`);
 
-    eventId instanceof Number ? id = eventId :  id = new ObjectId(eventId)
-
     const result = await db.collection('milestones').updateOne(
-      { _id: id }, // 3. CRITICAL: Wrap the string ID in new ObjectId()
+      { _id: new ObjectId(eventId) }, // 3. CRITICAL: Wrap the string ID in new ObjectId()
       { 
         $set: { 
           date: req.body.date,
