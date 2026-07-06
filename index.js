@@ -16,12 +16,13 @@ const dbName = 'amie_babie';
 
 // 3. ROUTES
 // Important: These must match exactly what you call in React
-app.get('/api/events', async (req, res) => {
+app.get('/api/events/:sortOrder', async (req, res) => {
   try {
+    const sortOrder = req.params.sortOrder;
     const db = client.db(dbName);
     const events = await db.collection('milestones')
       .find()
-      .sort({ sortDate: -1 })
+      .sort({ sortDate: sortOrder })
       .toArray();
     res.json(events);
   } catch (err) {
