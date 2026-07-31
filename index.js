@@ -2,20 +2,123 @@ import express from 'express';
 import { MongoClient, ObjectId } from 'mongodb';
 import cors from 'cors';
 import 'dotenv/config';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 const app = express();
 
-// 1. MIDDLEWARE
+// MIDDLEWARE
 // This allows your Vercel frontend to talk to this Render backend
 app.use(cors()); 
 app.use(express.json());
 
-// 2. MONGODB SETUP
+// HTTP + SOCKETIO SETUP
+const httpServer = createServer(app);
+const io = new Server(httpServer, { cors: { origin: "*", methods: ["GET", "POST"]}})
+
+// MONGODB SETUP
 const client = new MongoClient(process.env.MONGO_URI);
 const dbName = 'amie_babie';
 
-// 3. ROUTES
-// Important: These must match exactly what you call in React
+// MULTIPLAYER SETUP
+
+// New idea
+// Send Rows / Cols / Mines / Nukes / Gifts counts to client on start of game, They create their own board
+// Have to have all players status ready to start game, the counts are computed then
+// On ready, status = ready, powerups are sent to server.
+// When one person chnages setting all see it except powerup
+
+const gameRooms = {};
+
+io.on('connection', (socket) => {console.log(`${socket.id} connected`);
+      socket.on('joinGame', ({roomID, playerID, nickname, status}) => {
+        socket.join(roomID);
+        if(!gameRooms){
+          gameRooms[roomID] = {
+            rows: 5,
+            cols: 5,
+            mines: 4,
+            players: {},
+            state: "Lobby"
+          }
+        }
+
+        if(!gameRooms[roomID].players[playerID]){
+          gameRooms[roomID].players[playerID] = {
+            rows: gameRooms[roomID].rows,
+            cols: gameRooms[roomID].cols,
+            mines: gameRooms[roomID].mines,
+            nukes: 0,
+            gifts: 0,
+            status: status, 
+            nickname: nickname, 
+            score: 0
+          };
+        }
+
+        io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
+      });
+
+      socket.on('changeSettings', ({rows, cols, mines}) => {
+        gameRooms[roomID].rows = rows
+        gameRooms[roomID].cols = cols
+        gameRooms[roomID].mines = mines
+
+        io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
+      }); 
+
+      socket.on('startGame', ({roomID}) => {
+        gameRooms[roomID].state = "In Game";
+
+        // Powerup count logic goes here after working prototype
+
+        const playerIDs = Object.keys(room.players);
+
+        playerIDs.forEach((pid, index) => {
+          // Powerups get assigned to each player here
+          gameRooms[roomID].players[pid].status = "In Game";
+        })
+
+        io.to(roomID).emit('start_game', gameRooms[roomID]);
+      }); 
+
+      socket.on('endGame', ({roomID, playerID, score, status}) => {
+        gameRooms[roomID].players[playerID].status = status;
+        gameRooms[roomID].players[playerID].score += Number(score);
+
+        const playerIDs = Object.keys(room.players);
+
+        playerIDs.forEach((pid, index) => {
+          // Powerups get assigned to each player here
+          if(gameRooms[roomID].players[pid].status === "In Game"){
+            io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
+            return;
+          }
+        })
+
+        io.to(roomID).emit('round_over', getRoomSummary(gameRooms[roomID]));
+      })
+});
+
+// Helper function: Strips out rows / mines / cols etc
+function getRoomSummary(room) {
+  const playerSummaries = {};
+  Object.keys(room.players).forEach((pid) => {
+    playerSummaries[pid] = {
+      nickname: room.players[pid].nickname,
+      status: room.players[pid].status,
+      score: room.players[pid].score
+    };
+  });
+
+  return {
+    room: room,
+    players: playerSummaries
+  };
+}
+
+// ROUTES
+// These must match exactly what you call in React
 app.get('/api/events/:sortOrder', async (req, res) => {
   try {
     const sortOrder = req.params.sortOrder;
@@ -40,7 +143,7 @@ app.put('/api/events/:id', async (req, res) => {
     const updatedSortDate = new Date(`${req.body.date}, ${req.body.year}`);
 
     const result = await db.collection('milestones').updateOne(
-      { _id: new ObjectId(eventId) }, // 3. CRITICAL: Wrap the string ID in new ObjectId()
+      { _id: new ObjectId(eventId) }, // CRITICAL: Wrap the string ID in new ObjectId()
       { 
         $set: { 
           date: req.body.date,
