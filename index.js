@@ -59,10 +59,16 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
       });
 
-      socket.on('changeSettings', ({rows, cols, mines}) => {
+      socket.on('changeSettings', ({rows, cols, mines, roomID}) => {
         gameRooms[roomID].rows = rows
         gameRooms[roomID].cols = cols
         gameRooms[roomID].mines = mines
+
+        Object.keys(gameRooms[roomID].players).forEach((pid) => {
+          gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
+          gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
+          gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
+        });
 
         io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
       }); 
@@ -72,10 +78,15 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
 
         // Powerup count logic goes here after working prototype
 
-        const playerIDs = Object.keys(room.players);
+        const playerIDs = Object.keys(gameRooms[roomID].players);
 
         playerIDs.forEach((pid, index) => {
           // Powerups get assigned to each player here
+          gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
+          gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
+          gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
+          gameRooms[roomID].players[pid].nukes = 0;
+          gameRooms[roomID].players[pid].gifts = 0;
           gameRooms[roomID].players[pid].status = "In Game";
         })
 
@@ -83,7 +94,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
       }); 
 
       socket.on('endGame', ({roomID, playerID, score, status}) => {
-        gameRooms[roomID].players[playerID].status = status;
+        
         gameRooms[roomID].players[playerID].score += Number(score);
 
         const playerIDs = Object.keys(room.players);
@@ -91,11 +102,13 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         playerIDs.forEach((pid, index) => {
           // Powerups get assigned to each player here
           if(gameRooms[roomID].players[pid].status === "In Game"){
+            gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
             io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
             return;
           }
         })
-
+        
+        gameRooms[roomID].state = status;
         io.to(roomID).emit('round_over', getRoomSummary(gameRooms[roomID]));
       })
 });
