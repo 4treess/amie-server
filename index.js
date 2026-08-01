@@ -33,7 +33,7 @@ const gameRooms = {};
 io.on('connection', (socket) => {console.log(`${socket.id} connected`);
       socket.on('joinGame', ({roomID, playerID, nickname, status}) => {
         socket.join(roomID);
-        if(!gameRooms){
+        if(!gameRooms[roomID]){
           gameRooms[roomID] = {
             rows: 5,
             cols: 5,
@@ -90,14 +90,14 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
           gameRooms[roomID].players[pid].status = "In Game";
         })
 
-        io.to(roomID).emit('start_game', gameRooms[roomID]);
+        io.to(roomID).emit('start_game', {room: gameRooms[roomID]});
       }); 
 
       socket.on('endGame', ({roomID, playerID, score, status}) => {
         
         gameRooms[roomID].players[playerID].score += Number(score);
 
-        const playerIDs = Object.keys(room.players);
+        const playerIDs = Object.keys(gameRooms[roomID].players);
 
         playerIDs.forEach((pid, index) => {
           // Powerups get assigned to each player here
@@ -224,7 +224,7 @@ async function start() {
     await client.connect();
     console.log("✅ Connected to MongoDB Atlas");
     
-    app.listen(PORT, '0.0.0.0', () => {
+    httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server is live on port ${PORT}`);
     });
   } catch (err) {
