@@ -38,6 +38,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
             rows: 5,
             cols: 5,
             mines: 4,
+            rounds: 0,
             players: {},
             state: "Lobby"
           }
@@ -59,10 +60,11 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         io.to(roomID).emit('room_status_update', gameRooms[roomID]);
       });
 
-      socket.on('changeSettings', ({rows, cols, mines, roomID}) => {
+      socket.on('changeSettings', ({rows, cols, mines, rounds, roomID}) => {
         gameRooms[roomID].rows = rows
         gameRooms[roomID].cols = cols
         gameRooms[roomID].mines = mines
+        gameRooms[roomID].rounds = rounds
 
         Object.keys(gameRooms[roomID].players).forEach((pid) => {
           gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
