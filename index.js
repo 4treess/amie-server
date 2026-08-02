@@ -56,7 +56,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
           };
         }
 
-        io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
+        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
       });
 
       socket.on('changeSettings', ({rows, cols, mines, roomID}) => {
@@ -70,7 +70,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
           gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
         });
 
-        io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
+        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
       }); 
 
       socket.on('startGame', ({roomID}) => {
@@ -103,32 +103,32 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
           // Powerups get assigned to each player here
           if(gameRooms[roomID].players[pid].status === "In Game"){
             gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
-            io.to(roomID).emit('room_status_update', getRoomSummary(gameRooms[roomID]));
+            io.to(roomID).emit('room_status_update', gameRooms[roomID]);
             return;
           }
         })
         
         gameRooms[roomID].state = status;
-        io.to(roomID).emit('round_over', getRoomSummary(gameRooms[roomID]));
+        io.to(roomID).emit('round_over', gameRooms[roomID]);
       })
 });
 
 // Helper function: Strips out rows / mines / cols etc
-function getRoomSummary(room) {
-  const playerSummaries = {};
-  Object.keys(room.players).forEach((pid) => {
-    playerSummaries[pid] = {
-      nickname: room.players[pid].nickname,
-      status: room.players[pid].status,
-      score: room.players[pid].score
-    };
-  });
+// function getRoomSummary(room) {
+//   const playerSummaries = {};
+//   Object.keys(room.players).forEach((pid) => {
+//     playerSummaries[pid] = {
+//       nickname: room.players[pid].nickname,
+//       status: room.players[pid].status,
+//       score: room.players[pid].score
+//     };
+//   });
 
-  return {
-    room: room,
-    players: playerSummaries
-  };
-}
+//   return {
+//     room: room,
+//     players: playerSummaries
+//   };
+// }
 
 // ROUTES
 // These must match exactly what you call in React
