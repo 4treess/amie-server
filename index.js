@@ -101,13 +101,7 @@ io.on('connection', (socket) => {
     io.to(roomID).emit('start_game', { room: gameRooms[roomID] });
   });
 
-  socket.on('endGame', ({ roomID, playerID, score, status, rounds, currentRound }) => {
-    if (currentRound + 1 > rounds) {
-      gameRooms[roomID].players[playerID].status = "Lobby";
-    } else {
-      gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
-    }
-
+  socket.on('endGame', ({ roomID, playerID, score, status}) => {
     gameRooms[roomID].players[playerID].score += Number(score);
 
     const playerIDs = Object.keys(gameRooms[roomID].players);
