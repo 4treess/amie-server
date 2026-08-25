@@ -95,8 +95,13 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         io.to(roomID).emit('start_game', {room: gameRooms[roomID]});
       }); 
 
-      socket.on('endGame', ({roomID, playerID, score, status}) => {
-        gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
+      socket.on('endGame', ({roomID, playerID, score, status, rounds, currentRound}) => {
+        if(currentRound + 1 > rounds){
+          gameRooms[roomID].players[playerID].status = "Lobby";
+          console.log("bwbebebwbbwe")
+        } else {
+          gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
+        }
         gameRooms[roomID].players[playerID].score += Number(score);
 
         const playerIDs = Object.keys(gameRooms[roomID].players);
@@ -110,8 +115,8 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         })
         
         gameRooms[roomID].state = status;
-        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
         io.to(roomID).emit('round_over', gameRooms[roomID]);
+        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
       })
 });
 
