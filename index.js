@@ -103,6 +103,7 @@ io.on('connection', (socket) => {
 
   socket.on('endGame', ({ roomID, playerID, score, status}) => {
     gameRooms[roomID].players[playerID].score += Number(score);
+    gameRooms[roomID].players[playerID].status = status
 
     const playerIDs = Object.keys(gameRooms[roomID].players);
 
@@ -114,7 +115,7 @@ io.on('connection', (socket) => {
       }
     });
 
-    gameRooms[roomID].state = status;
+    gameRooms[roomID].state = "Lobby";
     io.to(roomID).emit('round_over', gameRooms[roomID]);
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
