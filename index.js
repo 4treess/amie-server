@@ -40,7 +40,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
             mines: 4,
             rounds: 0,
             players: {},
-            state: "Lobby"
+            gameState: "Lobby"
           }
         }
 
@@ -76,7 +76,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
       }); 
 
       socket.on('startGame', ({roomID}) => {
-        gameRooms[roomID].state = "In Game";
+        gameRooms[roomID].gameState = "In Game";
 
         // Powerup count logic goes here after working prototype
 
@@ -90,9 +90,9 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
           gameRooms[roomID].players[pid].nukes = 0;
           gameRooms[roomID].players[pid].gifts = 0;
 
-          if(gameRooms[roomID].players[pid].status === "Lobby"){
-            gameRooms[roomID].players[pid].score = 0;
-          } 
+          // if(gameRooms[roomID].players[pid].status === "Lobby"){
+          //   gameRooms[roomID].players[pid].score = 0;
+          // } 
 
           gameRooms[roomID].players[pid].status = "In Game";
         })
@@ -113,7 +113,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         const allInLobby = playerIDs.every(pid => room.players[pid].status === "Lobby");
 
         if (allInLobby) {
-          room.state = "Lobby";
+          room.gameState = "Lobby";
         }
 
         // Broadcast state update to everyone in the room
