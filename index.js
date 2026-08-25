@@ -110,6 +110,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         })
         
         gameRooms[roomID].state = status;
+        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
         io.to(roomID).emit('round_over', gameRooms[roomID]);
       })
 });
