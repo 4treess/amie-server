@@ -89,6 +89,11 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
           gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
           gameRooms[roomID].players[pid].nukes = 0;
           gameRooms[roomID].players[pid].gifts = 0;
+
+          if(gameRooms[roomID].players[pid].status === "Lobby"){
+            gameRooms[roomID].players[pid].score = 0;
+          } 
+
           gameRooms[roomID].players[pid].status = "In Game";
         })
 
@@ -96,9 +101,9 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
       }); 
 
       socket.on('endGame', ({roomID, playerID, score, status, rounds, currentRound}) => {
+
         if(currentRound + 1 > rounds){
           gameRooms[roomID].players[playerID].status = "Lobby";
-          console.log("bwbebebwbbwe")
         } else {
           gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
         }
@@ -106,17 +111,17 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
 
         const playerIDs = Object.keys(gameRooms[roomID].players);
 
-        playerIDs.forEach((pid, index) => {
-          // Powerups get assigned to each player here
-          if(gameRooms[roomID].players[pid].status === "In Game"){
-            io.to(roomID).emit('room_status_update', gameRooms[roomID]);
-            return;
-          }
-        })
-        
-        gameRooms[roomID].state = status;
-        io.to(roomID).emit('round_over', gameRooms[roomID]);
-        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+        // Check if ALL players are done with the game/rounds
+        const playerIDs = Object.keys(room.players);
+        const allInLobby = playerIDs.every(pid => room.players[pid].status === "Lobby");
+
+        if (allInLobby) {
+          room.state = "Lobby";
+        }
+
+        // Broadcast state update to everyone in the room
+        io.to(roomID).emit('round_over', { room });
+        io.to(roomID).emit('room_status_update', room);
       })
 });
 
