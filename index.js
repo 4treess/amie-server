@@ -110,9 +110,6 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
         gameRooms[roomID].players[playerID].score += Number(score);
 
         const playerIDs = Object.keys(gameRooms[roomID].players);
-
-        // Check if ALL players are done with the game/rounds
-        const playerIDs = Object.keys(room.players);
         const allInLobby = playerIDs.every(pid => room.players[pid].status === "Lobby");
 
         if (allInLobby) {
