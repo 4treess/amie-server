@@ -9,19 +9,23 @@ const app = express();
 
 // MIDDLEWARE
 // This allows your Vercel frontend to talk to this Render backend
-app.use(cors()); 
+app.use(cors());
 app.use(express.json());
 
 // HTTP + SOCKETIO SETUP
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*", methods: ["GET", "POST"]}})
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 // MONGODB SETUP
 const client = new MongoClient(process.env.MONGO_URI);
 const dbName = 'amie_babie';
 
 // MULTIPLAYER SETUP
-
 // New idea
 // Send Rows / Cols / Mines / Nukes / Gifts counts to client on start of game, They create their own board
 // Have to have all players status ready to start game, the counts are computed then
@@ -30,96 +34,96 @@ const dbName = 'amie_babie';
 
 const gameRooms = {};
 
-io.on('connection', (socket) => {console.log(`${socket.id} connected`);
-      socket.on('joinGame', ({roomID, playerID, nickname, status}) => {
-        socket.join(roomID);
-        if(!gameRooms[roomID]){
-          gameRooms[roomID] = {
-            rows: 5,
-            cols: 5,
-            mines: 4,
-            rounds: 0,
-            players: {},
-            gameState: "Lobby"
-          }
-        }
+io.on('connection', (socket) => {
+  console.log(`${socket.id} connected`);
 
-        if(!gameRooms[roomID].players[playerID]){
-          gameRooms[roomID].players[playerID] = {
-            rows: gameRooms[roomID].rows,
-            cols: gameRooms[roomID].cols,
-            mines: gameRooms[roomID].mines,
-            nukes: 0,
-            gifts: 0,
-            status: status, 
-            nickname: nickname, 
-            score: 0
-          };
-        }
+  socket.on('joinGame', ({ roomID, playerID, nickname, status }) => {
+    socket.join(roomID);
 
+    if (!gameRooms[roomID]) {
+      gameRooms[roomID] = {
+        rows: 5,
+        cols: 5,
+        mines: 4,
+        rounds: 0,
+        players: {},
+        state: "Lobby"
+      };
+    }
+
+    if (!gameRooms[roomID].players[playerID]) {
+      gameRooms[roomID].players[playerID] = {
+        rows: gameRooms[roomID].rows,
+        cols: gameRooms[roomID].cols,
+        mines: gameRooms[roomID].mines,
+        nukes: 0,
+        gifts: 0,
+        status: status,
+        nickname: nickname,
+        score: 0
+      };
+    }
+
+    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  });
+
+  socket.on('changeSettings', ({ rows, cols, mines, rounds, roomID }) => {
+    gameRooms[roomID].rows = rows;
+    gameRooms[roomID].cols = cols;
+    gameRooms[roomID].mines = mines;
+    gameRooms[roomID].rounds = rounds;
+
+    Object.keys(gameRooms[roomID].players).forEach((pid) => {
+      gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
+      gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
+      gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
+    });
+
+    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  });
+
+  socket.on('startGame', ({ roomID }) => {
+    gameRooms[roomID].state = "In Game";
+
+    // Powerup count logic goes here after working prototype
+    const playerIDs = Object.keys(gameRooms[roomID].players);
+
+    playerIDs.forEach((pid, index) => {
+      // Powerups get assigned to each player here
+      gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
+      gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
+      gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
+      gameRooms[roomID].players[pid].nukes = 0;
+      gameRooms[roomID].players[pid].gifts = 0;
+      gameRooms[roomID].players[pid].status = "In Game";
+    });
+
+    io.to(roomID).emit('start_game', { room: gameRooms[roomID] });
+  });
+
+  socket.on('endGame', ({ roomID, playerID, score, status, rounds, currentRound }) => {
+    if (currentRound + 1 > rounds) {
+      gameRooms[roomID].players[playerID].status = "Lobby";
+    } else {
+      gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
+    }
+
+    gameRooms[roomID].players[playerID].score += Number(score);
+
+    const playerIDs = Object.keys(gameRooms[roomID].players);
+
+    playerIDs.forEach((pid, index) => {
+      // Powerups get assigned to each player here
+      if (gameRooms[roomID].players[pid].status === "In Game") {
         io.to(roomID).emit('room_status_update', gameRooms[roomID]);
-      });
+        return;
+      }
+    });
 
-      socket.on('changeSettings', ({rows, cols, mines, rounds, roomID}) => {
-        gameRooms[roomID].rows = rows
-        gameRooms[roomID].cols = cols
-        gameRooms[roomID].mines = mines
-        gameRooms[roomID].rounds = rounds
-
-        Object.keys(gameRooms[roomID].players).forEach((pid) => {
-          gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
-          gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
-          gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
-        });
-
-        io.to(roomID).emit('room_status_update', gameRooms[roomID]);
-      }); 
-
-      socket.on('startGame', ({roomID}) => {
-        gameRooms[roomID].gameState = "In Game";
-
-        // Powerup count logic goes here after working prototype
-
-        const playerIDs = Object.keys(gameRooms[roomID].players);
-
-        playerIDs.forEach((pid, index) => {
-          // Powerups get assigned to each player here
-          gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
-          gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
-          gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
-          gameRooms[roomID].players[pid].nukes = 0;
-          gameRooms[roomID].players[pid].gifts = 0;
-
-          // if(gameRooms[roomID].players[pid].status === "Lobby"){
-          //   gameRooms[roomID].players[pid].score = 0;
-          // } 
-
-          gameRooms[roomID].players[pid].status = "In Game";
-        })
-
-        io.to(roomID).emit('start_game', {room: gameRooms[roomID]});
-      }); 
-
-      socket.on('endGame', ({roomID, playerID, score, status, rounds, currentRound}) => {
-
-        if(currentRound + 1 > rounds){
-          gameRooms[roomID].players[playerID].status = "Lobby";
-        } else {
-          gameRooms[roomID].players[playerID].status = "Waiting For Other Players";
-        }
-        gameRooms[roomID].players[playerID].score += Number(score);
-
-        const playerIDs = Object.keys(gameRooms[roomID].players);
-        const allInLobby = playerIDs.every(pid => room.players[pid].status === "Lobby");
-
-        if (allInLobby) {
-          room.gameState = "Lobby";
-        }
-
-        // Broadcast state update to everyone in the room
-        io.to(roomID).emit('round_over', { room });
-        io.to(roomID).emit('room_status_update', room);
-      })
+    gameRooms[roomID].state = status;
+    io.to(roomID).emit('round_over', gameRooms[roomID]);
+    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  });
 });
 
 // Helper function: Strips out rows / mines / cols etc
@@ -132,7 +136,7 @@ io.on('connection', (socket) => {console.log(`${socket.id} connected`);
 //       score: room.players[pid].score
 //     };
 //   });
-
+//
 //   return {
 //     room: room,
 //     players: playerSummaries
@@ -149,6 +153,7 @@ app.get('/api/events/:sortOrder', async (req, res) => {
       .find()
       .sort({ sortDate: sortOrder })
       .toArray();
+
     res.json(events);
   } catch (err) {
     console.error("Error fetching events:", err);
@@ -166,8 +171,8 @@ app.put('/api/events/:id', async (req, res) => {
 
     const result = await db.collection('milestones').updateOne(
       { _id: new ObjectId(eventId) }, // CRITICAL: Wrap the string ID in new ObjectId()
-      { 
-        $set: { 
+      {
+        $set: {
           date: req.body.date,
           year: req.body.year,
           shortDesc: req.body.shortDesc,
@@ -175,7 +180,7 @@ app.put('/api/events/:id', async (req, res) => {
           story: req.body.story,
           image: req.body.image,
           sortDate: updatedSortDate
-        } 
+        }
       }
     );
 
@@ -196,6 +201,7 @@ app.post('/api/events', async (req, res) => {
     const actualDate = new Date(`${req.body.date}, ${req.body.year}`);
     const result = await db.collection('milestones')
       .insertOne({ ...req.body, sortDate: actualDate, createdAt: new Date() });
+
     res.json(result);
   } catch (err) {
     console.error("Error saving event:", err);
@@ -224,7 +230,7 @@ app.delete('/api/events/:id', async (req, res) => {
   }
 });
 
-// 4. SERVER START & PORT LOGIC
+// SERVER START & PORT LOGIC
 // Render injects a PORT variable; we must listen on '0.0.0.0' for external access
 const PORT = process.env.PORT || 3001;
 
@@ -232,7 +238,7 @@ async function start() {
   try {
     await client.connect();
     console.log("✅ Connected to MongoDB Atlas");
-    
+
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server is live on port ${PORT}`);
     });
