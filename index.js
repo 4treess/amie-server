@@ -124,6 +124,11 @@ io.on('connection', (socket) => {
     gameRooms[roomID].players[playerID].status = status;
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
+
+  socket.on('resetPoints', ({roomID, playerID}) => {
+    gameRooms[roomID].players[playerID].score = 0;
+    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  });
 });
 
 // Helper function: Strips out rows / mines / cols etc
