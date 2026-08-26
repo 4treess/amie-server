@@ -110,7 +110,7 @@ io.on('connection', (socket) => {
 
     playerIDs.forEach((pid, index) => {
       // Powerups get assigned to each player here
-      if (gameRooms[roomID].players[pid].status === "In Game") {
+      if (gameRooms[roomID].players[pid].status != "Lobby") {
         io.to(roomID).emit('room_status_update', gameRooms[roomID]);
         return;
       }
@@ -118,6 +118,11 @@ io.on('connection', (socket) => {
 
     gameRooms[roomID].state = "Lobby";
     io.to(roomID).emit('round_over', gameRooms[roomID]);
+    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  });
+
+  socket.on('statusUpdate', ({roomID, playerID, status}) => {
+    gameRooms[roomID].players[playerID].status = status;
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
 });
