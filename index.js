@@ -84,7 +84,6 @@ io.on('connection', (socket) => {
 
   socket.on('startGame', ({ roomID }) => {
     gameRooms[roomID].state = "In Game";
-    console.log("Its me! Hi! Im the problem its me!")
 
     // Powerup count logic goes here after working prototype
     const playerIDs = Object.keys(gameRooms[roomID].players);
