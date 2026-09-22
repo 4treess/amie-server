@@ -8,8 +8,13 @@ import { Server } from 'socket.io';
 const app = express();
 
 // MIDDLEWARE
-// This allows your Vercel frontend to talk to this Render backend
-app.use(cors());
+// Allows preflight HTTP checks from cross-origin requests (Vercel)
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
 app.use(express.json());
 
 // HTTP + SOCKETIO SETUP
@@ -17,8 +22,11 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'], // Explicitly enables pure WebSocket fallback/upgrades
+  allowEIO3: true
 });
 
 // MONGODB SETUP
@@ -26,35 +34,29 @@ const client = new MongoClient(process.env.MONGO_URI);
 const dbName = 'amie_babie';
 
 // MULTIPLAYER SETUP
-// New idea
-// Send Rows / Cols / Mines / Nukes counts to client on start of game, They create their own board
-// Have to have all players status ready to start game, the counts are computed then
-// On ready, status = ready, powerups are sent to server.
-// When one person chnages setting all see it except powerup
-
 const gameRooms = {};
 
-function handlePowerUps(powerUp, previousPowerUp, mines, nukes){
-  if(powerUp.type != previousPowerUp.type){
-    switch(powerUp.type){
-      case "Extra Mines": 
-        mines += powerUp.value;
+function handlePowerUps(powerUp, previousPowerUp, mines, nukes) {
+  if (powerUp && previousPowerUp && powerUp.type !== previousPowerUp.type) {
+    switch (powerUp.type) {
+      case "Extra Mines":
+        mines += powerUp.value || 0;
         break;
       case "Nuke":
-        nukes += powerUp.value;
+        nukes += powerUp.value || 0;
         break;
     }
 
-    switch(previousPowerUp.type){
+    switch (previousPowerUp.type) {
       case "Extra Mines":
-        mines -= previousPowerUp.value;
+        mines -= previousPowerUp.value || 0;
         break;
       case "Nuke":
-        nukes -= previousPowerUp.value;
+        nukes -= previousPowerUp.value || 0;
         break;
     }
   }
-  return {mines: mines, nukes: nukes};
+  return { mines, nukes };
 }
 
 io.on('connection', (socket) => {
@@ -90,8 +92,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, previousPowerUp, roomID }) => {
+    if (!gameRooms[roomID]) return;
 
-    const result = {mines, nukes} = handlePowerUps(selectedPowerUp, previousPowerUp, mines, 0);
+    const result = handlePowerUps(selectedPowerUp, previousPowerUp, mines, 0);
 
     gameRooms[roomID].rows = rows;
     gameRooms[roomID].cols = cols;
@@ -102,21 +105,19 @@ io.on('connection', (socket) => {
       gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
       gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
       gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
-
-      gameRooms[roomID].players[pid].nukes = gameRooms[roomID].nukes + result.nukes;
+      gameRooms[roomID].players[pid].nukes = (gameRooms[roomID].nukes || 0) + result.nukes;
     });
 
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
 
   socket.on('startGame', ({ roomID }) => {
+    if (!gameRooms[roomID]) return;
     gameRooms[roomID].state = "In Game";
 
-    // Powerup count logic goes here after working prototype
     const playerIDs = Object.keys(gameRooms[roomID].players);
 
-    playerIDs.forEach((pid, index) => {
-      // Powerups get assigned to each player here
+    playerIDs.forEach((pid) => {
       gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
       gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
       gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
@@ -127,15 +128,16 @@ io.on('connection', (socket) => {
     io.to(roomID).emit('start_game', { room: gameRooms[roomID] });
   });
 
-  socket.on('endGame', ({ roomID, playerID, score, status}) => {
+  socket.on('endGame', ({ roomID, playerID, score, status }) => {
+    if (!gameRooms[roomID] || !gameRooms[roomID].players[playerID]) return;
+
     gameRooms[roomID].players[playerID].score += Number(score);
-    gameRooms[roomID].players[playerID].status = status
+    gameRooms[roomID].players[playerID].status = status;
 
     const playerIDs = Object.keys(gameRooms[roomID].players);
 
     playerIDs.forEach((pid) => {
-      // Powerups get assigned to each player here
-      if (gameRooms[roomID].players[pid].status != "Lobby") {
+      if (gameRooms[roomID].players[pid].status !== "Lobby") {
         io.to(roomID).emit('room_status_update', gameRooms[roomID]);
         return;
       }
@@ -146,36 +148,22 @@ io.on('connection', (socket) => {
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
 
-  socket.on('statusUpdate', ({roomID, playerID, status}) => {
-    gameRooms[roomID].players[playerID].status = status;
-    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  socket.on('statusUpdate', ({ roomID, playerID, status }) => {
+    if (gameRooms[roomID]?.players[playerID]) {
+      gameRooms[roomID].players[playerID].status = status;
+      io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+    }
   });
 
-  socket.on('resetPoints', ({roomID, playerID}) => {
-    gameRooms[roomID].players[playerID].score = 0;
-    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+  socket.on('resetPoints', ({ roomID, playerID }) => {
+    if (gameRooms[roomID]?.players[playerID]) {
+      gameRooms[roomID].players[playerID].score = 0;
+      io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+    }
   });
 });
 
-// Helper function: Strips out rows / mines / cols etc
-// function getRoomSummary(room) {
-//   const playerSummaries = {};
-//   Object.keys(room.players).forEach((pid) => {
-//     playerSummaries[pid] = {
-//       nickname: room.players[pid].nickname,
-//       status: room.players[pid].status,
-//       score: room.players[pid].score
-//     };
-//   });
-//
-//   return {
-//     room: room,
-//     players: playerSummaries
-//   };
-// }
-
 // ROUTES
-// These must match exactly what you call in React
 app.get('/api/events/:sortOrder', async (req, res) => {
   try {
     const sortOrder = req.params.sortOrder;
@@ -196,12 +184,10 @@ app.put('/api/events/:id', async (req, res) => {
   const db = client.db(dbName);
   try {
     const eventId = req.params.id;
-
-    // Build the updated chronological sorting key from the incoming edit data
     const updatedSortDate = new Date(`${req.body.date}, ${req.body.year}`);
 
     const result = await db.collection('milestones').updateOne(
-      { _id: new ObjectId(eventId) }, // CRITICAL: Wrap the string ID in new ObjectId()
+      { _id: new ObjectId(eventId) },
       {
         $set: {
           date: req.body.date,
@@ -240,14 +226,13 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
-// HANDLE DELETE MILESTONE
 app.delete('/api/events/:id', async (req, res) => {
   const db = client.db(dbName);
   try {
     const eventId = req.params.id;
 
     const result = await db.collection('milestones').deleteOne({
-      _id: new ObjectId(eventId) // Convert the string ID into a real MongoDB ObjectId
+      _id: new ObjectId(eventId)
     });
 
     if (result.deletedCount === 0) {
@@ -262,7 +247,6 @@ app.delete('/api/events/:id', async (req, res) => {
 });
 
 // SERVER START & PORT LOGIC
-// Render injects a PORT variable; we must listen on '0.0.0.0' for external access
 const PORT = process.env.PORT || 3001;
 
 async function start() {
