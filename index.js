@@ -27,12 +27,35 @@ const dbName = 'amie_babie';
 
 // MULTIPLAYER SETUP
 // New idea
-// Send Rows / Cols / Mines / Nukes / Gifts counts to client on start of game, They create their own board
+// Send Rows / Cols / Mines / Nukes counts to client on start of game, They create their own board
 // Have to have all players status ready to start game, the counts are computed then
 // On ready, status = ready, powerups are sent to server.
 // When one person chnages setting all see it except powerup
 
 const gameRooms = {};
+
+function handlePowerUps(powerUp, previousPowerUp, mines, nukes){
+  if(powerUp.type != previousPowerUp.type){
+    switch(powerUp.type){
+      case "Extra Mines": 
+        mines += powerUp.value;
+        break;
+      case "Nuke":
+        nukes += powerUp.value;
+        break;
+    }
+
+    switch(previousPowerUp.type){
+      case "Extra Mines":
+        mines -= previousPowerUp.value;
+        break;
+      case "Nuke":
+        nukes -= previousPowerUp.value;
+        break;
+    }
+  }
+  return {mines: mines, nukes: nukes};
+}
 
 io.on('connection', (socket) => {
   console.log(`${socket.id} connected`);
@@ -57,7 +80,6 @@ io.on('connection', (socket) => {
         cols: gameRooms[roomID].cols,
         mines: gameRooms[roomID].mines,
         nukes: 0,
-        gifts: 0,
         status: status,
         nickname: nickname,
         score: 0
@@ -67,16 +89,21 @@ io.on('connection', (socket) => {
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
 
-  socket.on('changeSettings', ({ rows, cols, mines, rounds, roomID }) => {
+  socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, previousPowerUp, roomID }) => {
+
+    const result = {mines, nukes} = handlePowerUps(selectedPowerUp, previousPowerUp, mines, 0);
+
     gameRooms[roomID].rows = rows;
     gameRooms[roomID].cols = cols;
-    gameRooms[roomID].mines = mines;
+    gameRooms[roomID].mines = result.mines;
     gameRooms[roomID].rounds = rounds;
 
     Object.keys(gameRooms[roomID].players).forEach((pid) => {
       gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
       gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
       gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
+
+      gameRooms[roomID].players[pid].nukes = gameRooms[roomID].nukes + result.nukes;
     });
 
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
@@ -94,7 +121,6 @@ io.on('connection', (socket) => {
       gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
       gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
       gameRooms[roomID].players[pid].nukes = 0;
-      gameRooms[roomID].players[pid].gifts = 0;
       gameRooms[roomID].players[pid].status = "In Game";
     });
 
@@ -107,7 +133,7 @@ io.on('connection', (socket) => {
 
     const playerIDs = Object.keys(gameRooms[roomID].players);
 
-    playerIDs.forEach((pid, index) => {
+    playerIDs.forEach((pid) => {
       // Powerups get assigned to each player here
       if (gameRooms[roomID].players[pid].status != "Lobby") {
         io.to(roomID).emit('room_status_update', gameRooms[roomID]);
