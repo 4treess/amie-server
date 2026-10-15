@@ -73,18 +73,35 @@ io.on('connection', (socket) => {
     const room = gameRooms[roomID];
     if (!room || !room.players[playerID]) return;
 
-    // Update room base configurations
+    // Update base room settings
     room.rows = Number(rows);
     room.cols = Number(cols);
     room.mines = Number(mines);
     room.rounds = Number(rounds);
 
-    // Save current player's equipped power-up
+    // Save current player's power-up choice without computing extra mines/nukes yet
     if (selectedPowerUp) {
       room.players[playerID].powerUp = selectedPowerUp;
     }
 
-    // 1. Calculate total Extra Mines & Nukes added by ALL OTHER players in the room
+    // Keep individual lobby status synced with base room settings
+    Object.keys(room.players).forEach((pid) => {
+      room.players[pid].rows = room.rows;
+      room.players[pid].cols = room.cols;
+      room.players[pid].mines = room.mines;
+      room.players[pid].nukes = 0;
+    });
+
+    io.to(roomID).emit('room_status_update', room);
+  });
+
+  socket.on('startGame', ({ roomID }) => {
+    const room = gameRooms[roomID];
+    if (!room) return;
+
+    room.state = "In Game";
+
+    // 1. Sum total Extra Mines and Nukes from all players
     let totalExtraMinesInRoom = 0;
     let totalNukesInRoom = 0;
 
@@ -97,34 +114,23 @@ io.on('connection', (socket) => {
       }
     });
 
-    // 2. Assign counts per player (Add power-ups from opponents, exclude self)
+    // 2. Compute per-player mines & nukes (exclude self)
     Object.keys(room.players).forEach((pid) => {
       const p = room.players[pid];
-      
+
       const ownExtraMines = p.powerUp?.type === "Extra Mines" ? (Number(p.powerUp.value) || 2) : 0;
       const ownNukes = p.powerUp?.type === "Nuke" ? (Number(p.powerUp.value) || 1) : 0;
 
-      // Opponents' Extra Mines/Nukes get applied to this player
+      p.status = "In Game";
       p.rows = room.rows;
       p.cols = room.cols;
+      
+      // Player receives opponents' extra mines and nukes
       p.mines = room.mines + (totalExtraMinesInRoom - ownExtraMines);
       p.nukes = totalNukesInRoom - ownNukes;
     });
 
-    io.to(roomID).emit('room_status_update', room);
-  });
-
-  socket.on('startGame', ({ roomID }) => {
-    if (!gameRooms[roomID]) return;
-    gameRooms[roomID].state = "In Game";
-
-    const playerIDs = Object.keys(gameRooms[roomID].players);
-
-    playerIDs.forEach((pid) => {
-      gameRooms[roomID].players[pid].status = "In Game";
-    });
-
-    io.to(roomID).emit('start_game', { room: gameRooms[roomID] });
+    io.to(roomID).emit('start_game', { room });
   });
 
   socket.on('endGame', ({ roomID, playerID, score, status }) => {
