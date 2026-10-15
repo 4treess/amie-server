@@ -78,12 +78,11 @@ io.on('connection', (socket) => {
       room.players[playerID].powerUp = selectedPowerUp;
     }
 
-    // Keep individual lobby player objects synced with selected room base settings
+    // Keep individual lobby player settings synced without zeroing out persistent values
     Object.keys(room.players).forEach((pid) => {
       room.players[pid].rows = room.rows;
       room.players[pid].cols = room.cols;
       room.players[pid].mines = room.mines;
-      room.players[pid].nukes = 0;
     });
 
     io.to(roomID).emit('room_status_update', room);
@@ -95,7 +94,7 @@ io.on('connection', (socket) => {
 
     room.state = "In Game";
 
-    // 1. Calculate Extra Mines and Nukes contributed by each player
+    // 1. Calculate Extra Mines and Nukes contributed across the room
     let totalExtraMinesInRoom = 0;
     let totalNukesInRoom = 0;
 
@@ -108,7 +107,7 @@ io.on('connection', (socket) => {
       }
     });
 
-    // 2. Distribute opponents' power-ups to each player's individual board config
+    // 2. Distribute opponents' power-ups to each player's board config
     Object.keys(room.players).forEach((pid) => {
       const p = room.players[pid];
 
@@ -119,9 +118,9 @@ io.on('connection', (socket) => {
       p.rows = Number(room.rows);
       p.cols = Number(room.cols);
       
-      // Calculate explicitly from room.mines base setting
+      // Calculate and assign persisted mines & nukes
       p.mines = Number(room.mines) + (totalExtraMinesInRoom - ownExtraMines);
-      p.nukes = Math.max(0, totalNukesInRoom - ownNukes);
+      p.nukes = Math.max(0, totalNukesInRoom - ownNukes); 
     });
 
     io.to(roomID).emit('start_game', { room });
