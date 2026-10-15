@@ -37,26 +37,27 @@ const dbName = 'amie_babie';
 const gameRooms = {};
 
 function handlePowerUps(powerUp, previousPowerUp, mines, nukes) {
-  if (powerUp && previousPowerUp && powerUp.type !== previousPowerUp.type) {
-    switch (powerUp.type) {
-      case "Extra Mines":
-        mines += powerUp.value || 0;
-        break;
-      case "Nuke":
-        nukes += powerUp.value || 0;
-        break;
-    }
+  // Extract string types safely whether passed as an object or a raw string
+  const currentType = typeof powerUp === 'object' ? powerUp?.type : powerUp;
+  const currentValue = typeof powerUp === 'object' ? (powerUp?.value || 0) : 0;
 
-    switch (previousPowerUp.type) {
-      case "Extra Mines":
-        mines -= previousPowerUp.value || 0;
-        break;
-      case "Nuke":
-        nukes -= previousPowerUp.value || 0;
-        break;
-    }
+  const prevType = typeof previousPowerUp === 'object' ? previousPowerUp?.type : previousPowerUp;
+  // If previous object value isn't sent, fallback to matching default values
+  const prevValue = typeof previousPowerUp === 'object' 
+    ? (previousPowerUp?.value || 0) 
+    : (prevType === "Extra Mines" ? 2 : prevType === "Nuke" ? 1 : 0);
+
+  if (currentType && prevType && currentType !== prevType) {
+    // Apply new power-up adjustments
+    if (currentType === "Extra Mines") mines += currentValue;
+    if (currentType === "Nuke") nukes += currentValue;
+
+    // Remove previous power-up adjustments
+    if (prevType === "Extra Mines") mines -= prevValue;
+    if (prevType === "Nuke") nukes -= prevValue;
   }
-  return { mines, nukes };
+
+  return { mines: Math.max(1, mines), nukes: Math.max(0, nukes) };
 }
 
 io.on('connection', (socket) => {
@@ -70,6 +71,7 @@ io.on('connection', (socket) => {
         rows: 5,
         cols: 5,
         mines: 4,
+        nukes: 0,
         rounds: 0,
         players: {},
         state: "Lobby"
@@ -91,21 +93,22 @@ io.on('connection', (socket) => {
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
 
-  socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, previousPowerUp, roomID }) => {
+  socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, previousPowerUp, roomID, playerID}) => {
     if (!gameRooms[roomID]) return;
 
-    const result = handlePowerUps(selectedPowerUp, previousPowerUp, mines, 0);
+    const result = handlePowerUps(selectedPowerUp, previousPowerUp, mines, gameRooms[roomID].nukes);
 
     gameRooms[roomID].rows = rows;
     gameRooms[roomID].cols = cols;
     gameRooms[roomID].mines = result.mines;
     gameRooms[roomID].rounds = rounds;
+    gameRooms[roomID].nukes = result.nukes;
 
     Object.keys(gameRooms[roomID].players).forEach((pid) => {
       gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
       gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
-      gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
-      gameRooms[roomID].players[pid].nukes = (gameRooms[roomID].nukes || 0) + result.nukes;
+      gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines - playerID === pid ? selectedPowerUp.value : 0;
+      gameRooms[roomID].players[pid].nukes = gameRooms[roomID].nukes - playerID === pid ? selectedPowerUp.value : 0;
     });
 
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
@@ -118,10 +121,6 @@ io.on('connection', (socket) => {
     const playerIDs = Object.keys(gameRooms[roomID].players);
 
     playerIDs.forEach((pid) => {
-      gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
-      gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
-      gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines;
-      gameRooms[roomID].players[pid].nukes = 0;
       gameRooms[roomID].players[pid].status = "In Game";
     });
 
