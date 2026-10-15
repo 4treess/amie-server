@@ -38,36 +38,36 @@ const gameRooms = {};
 io.on('connection', (socket) => {
   console.log(`${socket.id} connected`);
 
-  socket.on('joinGame', ({ roomID, playerID, nickname, status }) => {
-    socket.join(roomID);
+  socket.on('joinGame', ({ roomID, playerID, nickname, status, selectedPowerUp }) => {
+  socket.join(roomID);
 
-    if (!gameRooms[roomID]) {
-      gameRooms[roomID] = {
-        rows: 5,
-        cols: 5,
-        mines: 4,
-        nukes: 0,
-        rounds: 0,
-        players: {},
-        state: "Lobby"
-      };
-    }
+  if (!gameRooms[roomID]) {
+    gameRooms[roomID] = {
+      rows: 5,
+      cols: 5,
+      baseMines: 4, 
+      nukes: 0,
+      rounds: 0,
+      players: {},
+      state: "Lobby"
+    };
+  }
 
-    if (!gameRooms[roomID].players[playerID]) {
-      gameRooms[roomID].players[playerID] = {
-        rows: gameRooms[roomID].rows,
-        cols: gameRooms[roomID].cols,
-        mines: gameRooms[roomID].mines,
-        nukes: 0,
-        powerUp: { type: "None", value: 0 },
-        status: status,
-        nickname: nickname,
-        score: 0
-      };
-    }
+  if (!gameRooms[roomID].players[playerID]) {
+    gameRooms[roomID].players[playerID] = {
+      rows: gameRooms[roomID].rows,
+      cols: gameRooms[roomID].cols,
+      mines: gameRooms[roomID].baseMines,
+      nukes: 0,
+      powerUp: selectedPowerUp || { type: "None", value: 0 }, 
+      status: status,
+      nickname: nickname,
+      score: 0
+    };
+  }
 
-    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
-  });
+  io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+});
 
   socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, roomID, playerID }) => {
     const room = gameRooms[roomID];
@@ -96,42 +96,40 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', ({ roomID }) => {
-    const room = gameRooms[roomID];
-    if (!room) return;
+  const room = gameRooms[roomID];
+  if (!room) return;
 
-    room.state = "In Game";
+  room.state = "In Game";
 
-    // 1. Sum total Extra Mines and Nukes from all players
-    let totalExtraMinesInRoom = 0;
-    let totalNukesInRoom = 0;
+  let totalExtraMinesInRoom = 0;
+  let totalNukesInRoom = 0;
 
-    Object.values(room.players).forEach((p) => {
-      if (p.powerUp?.type === "Extra Mines") {
-        totalExtraMinesInRoom += Number(p.powerUp.value) || 2;
-      }
-      if (p.powerUp?.type === "Nuke") {
-        totalNukesInRoom += Number(p.powerUp.value) || 1;
-      }
-    });
-
-    // 2. Compute per-player mines & nukes (exclude self)
-    Object.keys(room.players).forEach((pid) => {
-      const p = room.players[pid];
-
-      const ownExtraMines = p.powerUp?.type === "Extra Mines" ? (Number(p.powerUp.value) || 2) : 0;
-      const ownNukes = p.powerUp?.type === "Nuke" ? (Number(p.powerUp.value) || 1) : 0;
-
-      p.status = "In Game";
-      p.rows = room.rows;
-      p.cols = room.cols;
-      
-      // Player receives opponents' extra mines and nukes
-      p.mines = room.mines + (totalExtraMinesInRoom - ownExtraMines);
-      p.nukes = totalNukesInRoom - ownNukes;
-    });
-
-    io.to(roomID).emit('start_game', { room });
+  Object.values(room.players).forEach((p) => {
+    if (p.powerUp?.type === "Extra Mines") {
+      totalExtraMinesInRoom += Number(p.powerUp?.value) || 2;
+    }
+    if (p.powerUp?.type === "Nuke") {
+      totalNukesInRoom += Number(p.powerUp?.value) || 1;
+    }
   });
+
+  Object.keys(room.players).forEach((pid) => {
+    const p = room.players[pid];
+
+    const ownExtraMines = p.powerUp?.type === "Extra Mines" ? (Number(p.powerUp?.value) || 2) : 0;
+    const ownNukes = p.powerUp?.type === "Nuke" ? (Number(p.powerUp?.value) || 1) : 0;
+
+    p.status = "In Game";
+    p.rows = Number(room.rows);
+    p.cols = Number(room.cols);
+    
+    // Always calculate from room.baseMines so extra mines don't stack continuously
+    p.mines = Number(room.baseMines) + (totalExtraMinesInRoom - ownExtraMines);
+    p.nukes = Math.max(0, totalNukesInRoom - ownNukes);
+  });
+
+  io.to(roomID).emit('start_game', { room });
+});
 
   socket.on('endGame', ({ roomID, playerID, score, status }) => {
     if (!gameRooms[roomID] || !gameRooms[roomID].players[playerID]) return;
