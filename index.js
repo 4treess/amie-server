@@ -8,7 +8,6 @@ import { Server } from 'socket.io';
 const app = express();
 
 // MIDDLEWARE
-// Allows preflight HTTP checks from cross-origin requests (Vercel)
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -25,7 +24,7 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling'], // Explicitly enables pure WebSocket fallback/upgrades
+  transports: ['websocket', 'polling'],
   allowEIO3: true
 });
 
@@ -35,30 +34,6 @@ const dbName = 'amie_babie';
 
 // MULTIPLAYER SETUP
 const gameRooms = {};
-
-function handlePowerUps(powerUp, previousPowerUp, mines, nukes) {
-  // Extract string types safely whether passed as an object or a raw string
-  const currentType = typeof powerUp === 'object' ? powerUp?.type : powerUp;
-  const currentValue = typeof powerUp === 'object' ? (powerUp?.value || 0) : 0;
-
-  const prevType = typeof previousPowerUp === 'object' ? previousPowerUp?.type : previousPowerUp;
-  // If previous object value isn't sent, fallback to matching default values
-  const prevValue = typeof previousPowerUp === 'object' 
-    ? (previousPowerUp?.value || 0) 
-    : (prevType === "Extra Mines" ? 2 : prevType === "Nuke" ? 1 : 0);
-
-  if (currentType && prevType && currentType !== prevType) {
-    // Apply new power-up adjustments
-    if (currentType === "Extra Mines") mines += currentValue;
-    if (currentType === "Nuke") nukes += currentValue;
-
-    // Remove previous power-up adjustments
-    if (prevType === "Extra Mines") mines -= prevValue;
-    if (prevType === "Nuke") nukes -= prevValue;
-  }
-
-  return { mines: Math.max(1, mines), nukes: Math.max(0, nukes) };
-}
 
 io.on('connection', (socket) => {
   console.log(`${socket.id} connected`);
@@ -84,6 +59,7 @@ io.on('connection', (socket) => {
         cols: gameRooms[roomID].cols,
         mines: gameRooms[roomID].mines,
         nukes: 0,
+        powerUp: { type: "None", value: 0 },
         status: status,
         nickname: nickname,
         score: 0
@@ -93,25 +69,49 @@ io.on('connection', (socket) => {
     io.to(roomID).emit('room_status_update', gameRooms[roomID]);
   });
 
-  socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, previousPowerUp, roomID, playerID}) => {
-    if (!gameRooms[roomID]) return;
+  socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, roomID, playerID }) => {
+    const room = gameRooms[roomID];
+    if (!room || !room.players[playerID]) return;
 
-    const result = handlePowerUps(selectedPowerUp, previousPowerUp, mines, gameRooms[roomID].nukes);
+    // Update room base configurations
+    room.rows = Number(rows);
+    room.cols = Number(cols);
+    room.mines = Number(mines);
+    room.rounds = Number(rounds);
 
-    gameRooms[roomID].rows = rows;
-    gameRooms[roomID].cols = cols;
-    gameRooms[roomID].mines = result.mines;
-    gameRooms[roomID].rounds = rounds;
-    gameRooms[roomID].nukes = result.nukes;
+    // Save current player's equipped power-up
+    if (selectedPowerUp) {
+      room.players[playerID].powerUp = selectedPowerUp;
+    }
 
-    Object.keys(gameRooms[roomID].players).forEach((pid) => {
-      gameRooms[roomID].players[pid].rows = gameRooms[roomID].rows;
-      gameRooms[roomID].players[pid].cols = gameRooms[roomID].cols;
-      gameRooms[roomID].players[pid].mines = gameRooms[roomID].mines - playerID === pid ? selectedPowerUp.value : 0;
-      gameRooms[roomID].players[pid].nukes = gameRooms[roomID].nukes - playerID === pid ? selectedPowerUp.value : 0;
+    // 1. Calculate total Extra Mines & Nukes added by ALL OTHER players in the room
+    let totalExtraMinesInRoom = 0;
+    let totalNukesInRoom = 0;
+
+    Object.values(room.players).forEach((p) => {
+      if (p.powerUp?.type === "Extra Mines") {
+        totalExtraMinesInRoom += Number(p.powerUp.value) || 2;
+      }
+      if (p.powerUp?.type === "Nuke") {
+        totalNukesInRoom += Number(p.powerUp.value) || 1;
+      }
     });
 
-    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+    // 2. Assign counts per player (Add power-ups from opponents, exclude self)
+    Object.keys(room.players).forEach((pid) => {
+      const p = room.players[pid];
+      
+      const ownExtraMines = p.powerUp?.type === "Extra Mines" ? (Number(p.powerUp.value) || 2) : 0;
+      const ownNukes = p.powerUp?.type === "Nuke" ? (Number(p.powerUp.value) || 1) : 0;
+
+      // Opponents' Extra Mines/Nukes get applied to this player
+      p.rows = room.rows;
+      p.cols = room.cols;
+      p.mines = room.mines + (totalExtraMinesInRoom - ownExtraMines);
+      p.nukes = totalNukesInRoom - ownNukes;
+    });
+
+    io.to(roomID).emit('room_status_update', room);
   });
 
   socket.on('startGame', ({ roomID }) => {
