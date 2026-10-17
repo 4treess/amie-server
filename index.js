@@ -94,7 +94,7 @@ io.on('connection', (socket) => {
 
     room.state = "In Game";
 
-    // 1. Calculate Extra Mines and Nukes contributed across the room
+    // 1. Calculate Extra Mines and Nukes across all players in the room
     let totalExtraMinesInRoom = 0;
     let totalNukesInRoom = 0;
 
@@ -107,7 +107,7 @@ io.on('connection', (socket) => {
       }
     });
 
-    // 2. Distribute opponents' power-ups to each player's board config
+    // 2. Assign per-player mines & nukes WITHOUT overwriting base room.mines
     Object.keys(room.players).forEach((pid) => {
       const p = room.players[pid];
 
@@ -115,8 +115,8 @@ io.on('connection', (socket) => {
       p.rows = Number(room.rows);
       p.cols = Number(room.cols);
       
-      // Calculate and assign persisted mines & nukes
-      p.mines = Number(room.mines + totalExtraMinesInRoom);
+      // Always add totalExtraMinesInRoom to the base room.mines setting
+      p.mines = Number(room.mines) + totalExtraMinesInRoom;
       p.nukes = totalNukesInRoom; 
     });
 
