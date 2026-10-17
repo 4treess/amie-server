@@ -111,16 +111,13 @@ io.on('connection', (socket) => {
     Object.keys(room.players).forEach((pid) => {
       const p = room.players[pid];
 
-      const ownExtraMines = p.powerUp?.type === "Extra Mines" ? (Number(p.powerUp?.value) || 2) : 0;
-      const ownNukes = p.powerUp?.type === "Nuke" ? (Number(p.powerUp?.value) || 1) : 0;
-
       p.status = "In Game";
       p.rows = Number(room.rows);
       p.cols = Number(room.cols);
       
       // Calculate and assign persisted mines & nukes
-      p.mines = Number(room.mines) + (totalExtraMinesInRoom - ownExtraMines);
-      p.nukes = Math.max(0, totalNukesInRoom - ownNukes); 
+      p.mines = Number(room.mines + totalExtraMinesInRoom);
+      p.nukes = totalNukesInRoom; 
     });
 
     io.to(roomID).emit('start_game', { room });
