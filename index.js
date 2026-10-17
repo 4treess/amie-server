@@ -61,7 +61,7 @@ io.on('connection', (socket) => {
       };
     }
 
-    io.to(roomID).emit('room_status_update', gameRooms[roomID]);
+    io.to(roomID).emit('room_settings_update', gameRooms[roomID]);
   });
 
   socket.on('changeSettings', ({ rows, cols, mines, rounds, selectedPowerUp, roomID, playerID }) => {
@@ -85,7 +85,7 @@ io.on('connection', (socket) => {
       room.players[pid].mines = room.mines;
     });
 
-    io.to(roomID).emit('room_status_update', room);
+    io.to(roomID).emit('room_settings_update', room);
   });
 
   socket.on('startGame', ({ roomID }) => {
@@ -94,7 +94,7 @@ io.on('connection', (socket) => {
 
     room.state = "In Game";
 
-    // 1. Calculate Extra Mines and Nukes across all players in the room
+    // Calculate Extra Mines and Nukes across all players in the room
     let totalExtraMinesInRoom = 0;
     let totalNukesInRoom = 0;
 
@@ -107,7 +107,6 @@ io.on('connection', (socket) => {
       }
     });
 
-    // 2. Assign per-player mines & nukes WITHOUT overwriting base room.mines
     Object.keys(room.players).forEach((pid) => {
       const p = room.players[pid];
 
