@@ -547,7 +547,7 @@ app.get('/api/events/:sortOrder', async (req, res) => {
   try {
     const sortOrder = req.params.sortOrder;
     const db = client.db(dbName);
-    const events = await db.collection('Projects')
+    const events = await db.collection('milestones')
       .find()
       .sort({ sortDate: sortOrder })
       .toArray();
@@ -565,7 +565,7 @@ app.put('/api/events/:id', async (req, res) => {
     const eventId = req.params.id;
     const updatedSortDate = new Date(`${req.body.date}, ${req.body.year}`);
 
-    const result = await db.collection('Projects').updateOne(
+    const result = await db.collection('milestones').updateOne(
       { _id: new ObjectId(eventId) },
       {
         $set: {
@@ -595,7 +595,7 @@ app.post('/api/events', async (req, res) => {
   try {
     const db = client.db(dbName);
     const actualDate = new Date(`${req.body.date}, ${req.body.year}`);
-    const result = await db.collection('Projects')
+    const result = await db.collection('milestones')
       .insertOne({ ...req.body, sortDate: actualDate, createdAt: new Date() });
 
     res.json(result);
@@ -610,7 +610,7 @@ app.delete('/api/events/:id', async (req, res) => {
   try {
     const eventId = req.params.id;
 
-    const result = await db.collection('Projects').deleteOne({
+    const result = await db.collection('milestones').deleteOne({
       _id: new ObjectId(eventId)
     });
 
