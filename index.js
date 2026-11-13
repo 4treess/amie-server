@@ -581,13 +581,13 @@ app.put('/api/events/:id', async (req, res) => {
     );
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "No project found with that ID" });
+      return res.status(404).json({ error: "No Memory found with that ID" });
     }
 
-    res.json({ success: true, message: "Project updated successfully", result });
+    res.json({ success: true, message: "Memory updated successfully", result });
   } catch (err) {
     console.error("❌ Backend PUT Error:", err);
-    res.status(500).json({ error: "Failed to update project", details: err.message });
+    res.status(500).json({ error: "Failed to update Memory", details: err.message });
   }
 });
 
@@ -615,13 +615,13 @@ app.delete('/api/events/:id', async (req, res) => {
     });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "No project found with that ID" });
+      return res.status(404).json({ error: "No Memory found with that ID" });
     }
 
-    res.json({ success: true, message: "Project deleted successfully!" });
+    res.json({ success: true, message: "Memory deleted successfully!" });
   } catch (err) {
     console.error("❌ Backend DELETE Error:", err);
-    res.status(500).json({ error: "Failed to delete project", details: err.message });
+    res.status(500).json({ error: "Failed to delete Memory", details: err.message });
   }
 });
 
